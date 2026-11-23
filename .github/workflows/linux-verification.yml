@@ -1,0 +1,38 @@
+name: Lua Linux verification
+on:
+  push:
+    branches: [verify/lua-linux-20261123]
+permissions:
+  contents: read
+jobs:
+  assemble-and-link:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install NASM and 32-bit development libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nasm gcc-multilib libc6-dev-i386
+      - name: Run the documented compiler, assembler, and linker commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          uname -m
+          swiftc --version
+          nasm -v
+          gcc --version | head -n 1
+          python3 - <<'PYCODE'
+          import pathlib, re
+          readme = pathlib.Path('README.md').read_text()
+          sample = readme.split('```lua', 1)[1].split('```', 1)[0].lstrip()
+          pathlib.Path('example.lua').write_text(sample)
+          PYCODE
+          swiftc main.swift -o lua-compiler
+          ./lua-compiler example.lua
+          nasm -f elf32 example.asm -o example.o
+          gcc -m32 -no-pie example.o -o example
+          file example
+          output=$(./example)
+          printf 'Executable output: %s\n' "$output"
+          test "$output" = '10'
